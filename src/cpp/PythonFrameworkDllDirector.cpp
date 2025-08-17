@@ -21,8 +21,7 @@ static const uint32_t kGZIID_cISC4App = 0x26ce01c0;
 
 // SC4 Message IDs
 static const uint32_t kGZMSG_CheatIssued = 0x230e27ac;
-static const uint32_t kMsgCityInit = 0x26C63345;
-static const uint32_t kMsgCityShutdown = 0x26C63346;
+static const uint32_t kGZMSG_CityInited = 0x26d31ec1;
 static const uint32_t kMsgQueryExecStart = 0x26ad8e01;
 static const uint32_t kMsgQueryExecEnd = 0x26ad8e02;
 
@@ -96,8 +95,7 @@ public:
         // Register for city messages
         cIGZMessageServer2Ptr pMsgServ;
         if (pMsgServ) {
-            pMsgServ->AddNotification(this, kMsgCityInit);
-            pMsgServ->AddNotification(this, kMsgCityShutdown);
+            pMsgServ->AddNotification(this, kGZMSG_CityInited);
             LOG_INFO("Registered for city initialization messages");
         } else {
             LOG_WARN("Failed to get message server for city notifications");
@@ -176,16 +174,10 @@ public:
                 LOG_ERROR("Unknown exception in cheat processing");
             }
         }
-        else if (messageType == kMsgCityInit) {
+        else if (messageType == kGZMSG_CityInited) {
             LOG_INFO("Processing city initialization message");
             if (pythonManager) {
                 pythonManager->OnCityInit();
-            }
-        }
-        else if (messageType == kMsgCityShutdown) {
-            LOG_INFO("Processing city shutdown message");
-            if (pythonManager) {
-                pythonManager->OnCityShutdown();
             }
         }
 
