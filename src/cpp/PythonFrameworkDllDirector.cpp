@@ -5,6 +5,7 @@
 #include "cIGZFrameWork.h"
 #include "cIGZApp.h"
 #include "cIGZCheatCodeManager.h"
+#include "cIGZMessageServer2.h"
 #include "cISC4App.h"
 #include "cRZBaseString.h"
 #include "GZServPtrs.h"
@@ -92,6 +93,16 @@ public:
         // Register Python plugin cheats with SC4
         RegisterPythonCheats();
         
+        // Register for city messages
+        cIGZMessageServer2Ptr pMsgServ;
+        if (pMsgServ) {
+            pMsgServ->AddNotification(this, kMsgCityInit);
+            pMsgServ->AddNotification(this, kMsgCityShutdown);
+            LOG_INFO("Registered for city initialization messages");
+        } else {
+            LOG_WARN("Failed to get message server for city notifications");
+        }
+        
         LOG_INFO("PostAppInit() completed successfully");
         return result;
     }
@@ -125,12 +136,45 @@ public:
         uint32_t messageType = pMessage->GetType();
         
         if (messageType == kGZMSG_CheatIssued) {
-            LOG_INFO("Processing cheat message");
-            const auto* pStandardMsg = dynamic_cast<cIGZMessage2Standard*>(pMessage);
-            const uint32_t dwCheatID = pStandardMsg->GetData1();
-            const auto* pszCheatData = static_cast<cIGZString*>(pStandardMsg->GetVoid2());
-            
-            ProcessCheat(dwCheatID, pszCheatData);
+            try {
+                LOG_INFO("Cheat message received");
+                // Use static_cast instead of dynamic_cast to avoid RTTI issues
+                const auto* pStandardMsg = static_cast<cIGZMessage2Standard*>(pMessage);
+                
+                const uint32_t dwCheatID = pStandardMsg->GetData1();
+                const auto* pszCheatData = static_cast<cIGZString*>(pStandardMsg->GetVoid2());
+                
+                // Only process cheats that we registered
+                std::string cheatText;
+                if (pszCheatData && pszCheatData->ToChar()) {
+                    cheatText = pszCheatData->ToChar();
+                }
+                
+                LOG_INFO("Cheat ID: 0x{:08x}, Text: '{}'", dwCheatID, cheatText);
+                
+                if (!pythonManager) {
+                    LOG_ERROR("PythonManager is null");
+                    return true;
+                }
+                
+                // Check if this is one of our Python cheats
+                LOG_INFO("Getting registered cheats");
+                auto pythonCheats = pythonManager->GetRegisteredCheats();
+                LOG_INFO("Got {} registered cheats", pythonCheats.size());
+                
+                bool isPythonCheat = pythonCheats.find(cheatText) != pythonCheats.end();
+                
+                if (isPythonCheat) {
+                    LOG_INFO("Processing Python cheat: '{}'", cheatText);
+                    ProcessCheat(dwCheatID, pszCheatData);
+                } else {
+                    LOG_DEBUG("Ignoring non-Python cheat: '{}'", cheatText);
+                }
+            } catch (const std::exception& e) {
+                LOG_ERROR("Exception in cheat processing: {}", e.what());
+            } catch (...) {
+                LOG_ERROR("Unknown exception in cheat processing");
+            }
         }
         else if (messageType == kMsgCityInit) {
             LOG_INFO("Processing city initialization message");

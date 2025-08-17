@@ -7,6 +7,8 @@
 #include "cISC4PlumbingSimulator.h"
 #include "cISC424HourClock.h"
 #include "cRZBaseString.h"
+#include "GZServPtrs.h"
+#include "../utils/Logger.h"
 #include <algorithm>
 
 CityWrapper::CityWrapper()
@@ -152,7 +154,29 @@ CityWrapper::CityStats CityWrapper::GetCityStats() const
 void CityWrapper::UpdateCityReference()
 {
     // Get current city from SC4App
-    // This would be called when city changes
+    city = nullptr; // Reset first
+    
+    try {
+        cISC4AppPtr pApp;
+        if (pApp) {
+            city = pApp->GetCity();
+            if (city) {
+                std::string cityName = GetCityName();
+                LOG_INFO("CityWrapper: Successfully got city: '{}'", cityName);
+            } else {
+                LOG_WARN("CityWrapper: pApp->GetCity() returned null");
+            }
+        } else {
+            LOG_ERROR("CityWrapper: Failed to get SC4App instance");
+        }
+    } catch (const std::exception& e) {
+        city = nullptr;
+        LOG_ERROR("CityWrapper: Exception in UpdateCityReference: {}", e.what());
+    } catch (...) {
+        city = nullptr;
+        LOG_ERROR("CityWrapper: Unknown exception in UpdateCityReference");
+    }
+    
     InvalidateStatsCache();
 }
 

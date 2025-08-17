@@ -273,29 +273,39 @@ bool PythonManager::HandleCheat(uint32_t cheatID, const std::string& cheatText)
     LOG_INFO("HandleCheat called - ID: 0x{:08x}, Text: '{}'", cheatID, cheatText);
     
     try {
-        // Import CheatCommand from sc4_types
+        LOG_DEBUG("Step 1: Importing sc4_types module");
         py::module sc4_types = py::module::import("sc4_types");
+        
+        LOG_DEBUG("Step 2: Getting CheatCommand class");
         py::object CheatCommand = sc4_types.attr("CheatCommand");
         
-        // Create a CheatCommand object using keyword arguments
+        LOG_DEBUG("Step 3: Creating CheatCommand arguments");
         py::dict cheatArgs;
         cheatArgs["cheat_id"] = cheatID;
         cheatArgs["text"] = cheatText;
+        
+        LOG_DEBUG("Step 4: Creating CheatCommand object");
         py::object cheatCommand = CheatCommand(**cheatArgs);
+        LOG_DEBUG("Step 5: CheatCommand created successfully");
         
         // Call all plugins with the CheatCommand object
         for (const auto& [pluginName, plugin] : loadedPlugins) {
             if (plugin.loaded && plugin.instance_ptr) {
                 try {
+                    LOG_DEBUG("Step 6: Processing plugin: {}", pluginName);
                     auto* pluginObj = static_cast<py::object*>(plugin.instance_ptr);
+                    
                     if (py::hasattr(*pluginObj, "handle_cheat")) {
-                        LOG_DEBUG("Calling handle_cheat on plugin: {}", pluginName);
+                        LOG_DEBUG("Step 7: Calling handle_cheat on plugin: {}", pluginName);
                         py::object result = pluginObj->attr("handle_cheat")(cheatCommand);
+                        
+                        LOG_DEBUG("Step 8: Got result from plugin {}", pluginName);
                         // If any plugin handles the cheat and returns True, consider it processed
                         if (result.cast<bool>()) {
                             LOG_INFO("Cheat '{}' handled by plugin: {}", cheatText, pluginName);
                             return true;
                         }
+                        LOG_DEBUG("Step 9: Plugin {} returned false", pluginName);
                     } else {
                         LOG_DEBUG("Plugin {} does not have handle_cheat method", pluginName);
                     }
@@ -511,9 +521,9 @@ bool PythonManager::LoadPlugin(const std::string& filepath)
             return false;
         }
         
-        // Get the plugin class and instantiate it
+        // Get the plugin class and instantiate it with the city wrapper
         py::object pluginClass = pluginModule.attr("plugin_instance");
-        py::object pluginInstance = pluginClass();
+        py::object pluginInstance = pluginClass(cityWrapper);
         
         // Store the plugin instance
         py::object* instancePtr = new py::object(pluginInstance);
