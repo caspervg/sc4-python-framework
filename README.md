@@ -66,13 +66,6 @@ plugin_instance = MyPlugin
 - `SC4MessagePlugin`: Handle game messages  
 - `SC4PluginBase`: Base class for custom behavior
 
-## Features
-
-- Python 3.13 interpreter embedded in SC4's process
-- Type-safe plugin API using Pydantic
-- Unified logging system
-- Plugin hot-reloading for development
-
 ## How it works
 
 C++ DLL loads into SC4 and embeds a Python interpreter. Your plugins run as Python code with access to game data through safe wrapper classes.
