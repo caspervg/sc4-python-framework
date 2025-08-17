@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component name="BuildTargetManager">
+  <targets>
+    <target name="SC4PythonFramework" type="SHARED_LIBRARY">
+      <sources>
+        <source path="src/cpp/dllmain.cpp" />
+        <source path="src/cpp/PluginDirector.cpp" />
+        <source path="src/cpp/SC4PythonWrapper.cpp" />
+        <source path="src/cpp/PythonBindings.cpp" />
+      </sources>
+      <headers>
+        <header path="src/cpp/PluginDirector.h" />
+        <header path="src/cpp/SC4PythonWrapper.h" />
+      </headers>
+    </target>
+  </targets>
+</component>

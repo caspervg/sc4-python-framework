@@ -1,0 +1,12 @@
+[submodule "vendor/gzcom-dll"]
+	path = vendor/gzcom-dll
+	url = https://github.com/nsgomez/gzcom-dll.git
+	branch = master
+
+[submodule "vendor/pybind11"]
+	path = vendor/pybind11
+	url = https://github.com/pybind/pybind11.git
+	branch = master
+[submodule "vendor/spdlog"]
+	path = vendor/spdlog
+	url = https://github.com/gabime/spdlog.git

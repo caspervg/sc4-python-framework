@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component name="CMakeBuildConfigurationManager">
+  <configurations>
+    <configuration PROFILE_NAME="Debug" CONFIG_NAME="Debug" ENABLED="true" GENERATION_DIR="cmake-build-debug">
+      <ADDITIONAL_GENERATION_ENVIRONMENT>
+        <envs />
+      </ADDITIONAL_GENERATION_ENVIRONMENT>
+      <ADDITIONAL_CLEAN_ENVIRONMENT>
+        <envs />
+      </ADDITIONAL_CLEAN_ENVIRONMENT>
+    </configuration>
+    <configuration PROFILE_NAME="Release" CONFIG_NAME="Release" ENABLED="true" GENERATION_DIR="cmake-build-release">
+      <ADDITIONAL_GENERATION_ENVIRONMENT>
+        <envs />
+      </ADDITIONAL_GENERATION_ENVIRONMENT>
+      <ADDITIONAL_CLEAN_ENVIRONMENT>
+        <envs />
+      </ADDITIONAL_CLEAN_ENVIRONMENT>
+    </configuration>
+  </configurations>
+</component>

@@ -1,0 +1,4 @@
+; SC4PythonFramework.def
+LIBRARY SC4PythonFramework
+EXPORTS
+    RZGetCOMDllDirector
