@@ -20,7 +20,8 @@ cmake --build . --config Release
 ## Installation
 1. Copy `build/Release/SC4PythonFramework.dll` to `<My Documents>\SimCity 4\Plugins\`
 2. Copy the entire `src/python/` directory to `<My Documents>\SimCity 4\PythonScripts\`
-3. Your plugins go in `<My Documents>\SimCity 4\PythonScripts\examples\`
+3. Download and install a **32-bit (x86) version** of Python (3.13 or higher recommended). From the installation dir, copy python3.dll and python313.dll to the directory in `<Program Files>/SimCity4/Apps` (same directory as SimCity 4.exe)
+4. Your plugins go in `<My Documents>\SimCity 4\PythonScripts\<your-plugin-dir>\`
 
 ## Setup Dependencies
 Run this in the PythonScripts directory to install required packages:
