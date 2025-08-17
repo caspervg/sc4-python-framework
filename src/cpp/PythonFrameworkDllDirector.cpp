@@ -3,6 +3,7 @@
 #include "cRZMessage2COMDirector.h"
 #include "cIGZMessage2Standard.h"
 #include "cIGZFrameWork.h"
+#include "cIGZApp.h"
 #include "cIGZCheatCodeManager.h"
 #include "cISC4App.h"
 #include "cRZBaseString.h"
@@ -74,6 +75,11 @@ public:
             return false;
         }
         
+        // Get and register with the cheat manager
+        if (!SetupCheatManager()) {
+            LOG_WARN("Failed to setup cheat manager integration");
+        }
+        
         // Initialize Python environment first
         if (!pythonManager->Initialize()) {
             LOG_ERROR("Failed to initialize Python environment");
@@ -82,6 +88,10 @@ public:
         
         // Then load plugins
         bool result = pythonManager->LoadPlugins();
+        
+        // Register Python plugin cheats with SC4
+        RegisterPythonCheats();
+        
         LOG_INFO("PostAppInit() completed successfully");
         return result;
     }
@@ -142,6 +152,62 @@ private:
     std::unique_ptr<PythonManager> pythonManager;
     cIGZCheatCodeManager* cheatManager;
     
+    bool SetupCheatManager()
+    {
+        cIGZFrameWork* const pFramework = RZGetFrameWork();
+        if (!pFramework) {
+            LOG_ERROR("Failed to get framework");
+            return false;
+        }
+        
+        cIGZApp* const pApp = pFramework->Application();
+        if (!pApp) {
+            LOG_ERROR("Failed to get application");
+            return false;
+        }
+        
+        cISC4App* pISC4App;
+        if (!pApp->QueryInterface(kGZIID_cISC4App, (void**)&pISC4App)) {
+            LOG_ERROR("Failed to get SC4 application interface");
+            return false;
+        }
+        
+        cheatManager = pISC4App->GetCheatCodeManager();
+        if (!cheatManager) {
+            LOG_ERROR("Failed to get cheat code manager");
+            return false;
+        }
+        
+        // Register ourselves as a notification target for cheat messages
+        if (!cheatManager->AddNotification2(this, 0)) {
+            LOG_WARN("Failed to register for cheat notifications");
+        }
+        
+        LOG_INFO("Cheat manager setup completed successfully");
+        return true;
+    }
+    
+    void RegisterPythonCheats()
+    {
+        if (!cheatManager || !pythonManager) {
+            return;
+        }
+        
+        // Get list of registered cheats from Python plugins
+        auto pythonCheats = pythonManager->GetRegisteredCheats();
+        
+        for (const auto& [cheatText, cheatInfo] : pythonCheats) {
+            uint32_t cheatID = std::hash<std::string>{}(cheatText); // Generate ID from text
+            cRZBaseString cheatName(cheatText.c_str());
+            
+            if (cheatManager->RegisterCheatCode(cheatID, cheatName)) {
+                LOG_INFO("Registered Python cheat: '{}' with ID 0x{:08x}", cheatText, cheatID);
+            } else {
+                LOG_WARN("Failed to register Python cheat: '{}'", cheatText);
+            }
+        }
+    }
+
     bool ProcessCheat(uint32_t dwCheatID, cIGZString const* szCheatText)
     {
         if (!pythonManager) {

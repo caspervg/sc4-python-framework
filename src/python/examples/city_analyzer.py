@@ -4,31 +4,24 @@ City Analyzer Plugin for SC4 Python Framework
 This plugin demonstrates how to analyze city data and provide insights.
 """
 
-from sc4_plugin_base import CityAnalysisPlugin
+from sc4_plugin_base import SC4PluginBase
+from sc4_types import SC4Message
 import time
 import threading
 from typing import Dict, Any
 
-class CityAnalyzerPlugin(CityAnalysisPlugin):
+class CityAnalyzerPlugin(SC4PluginBase):
     """
     Plugin that analyzes city data and provides insights.
     """
     
-    @property
-    def name(self) -> str:
-        return "City Analyzer"
-    
-    @property
-    def version(self) -> str:
-        return "1.0.0"
-    
-    @property
-    def description(self) -> str:
-        return "Analyzes city data and provides insights about population, finances, and utilities"
-    
-    @property
-    def author(self) -> str:
-        return "SC4 Python Framework"
+    def get_plugin_info(self) -> Dict[str, str]:
+        return {
+            "name": "City Analyzer",
+            "version": "1.0.0",
+            "description": "Analyzes city data and provides insights about population, finances, and utilities",
+            "author": "SC4 Python Framework"
+        }
     
     def initialize(self) -> bool:
         """Initialize the plugin."""
@@ -73,7 +66,8 @@ class CityAnalyzerPlugin(CityAnalysisPlugin):
         """Main analysis loop that runs in a separate thread."""
         while self.running:
             try:
-                if self.city.is_valid():
+                city_info = self.get_city_info()
+                if city_info and city_info.is_valid:
                     analysis_results = self.analyze_city()
                     self._process_analysis_results(analysis_results)
                 
@@ -94,18 +88,21 @@ class CityAnalyzerPlugin(CityAnalysisPlugin):
         Returns:
             Dictionary containing analysis results
         """
-        if not self.city.is_valid():
+        city_info = self.get_city_info()
+        if not city_info or not city_info.is_valid:
             return {"error": "No valid city loaded"}
         
         try:
             # Basic city information
-            city_name = self.city.get_city_name()
-            population = self.city.get_city_population()
-            money = self.city.get_city_money()
-            mayor_mode = self.city.get_mayor_mode()
+            city_name = city_info.name
+            population = city_info.population
+            money = city_info.money
+            mayor_mode = city_info.mayor_mode
             
             # Get detailed city stats
-            stats = self.city.get_city_stats()
+            stats = self.get_city_stats()
+            if not stats:
+                return {"error": "Unable to get city statistics"}
             
             # Calculate derived metrics
             total_population = (stats.residential_population + 
@@ -285,11 +282,15 @@ class CityAnalyzerPlugin(CityAnalysisPlugin):
         self.population_history.clear()
         self.money_history.clear()
         
-        if self.city.is_valid():
-            city_name = self.city.get_city_name()
-            self.logger.info(f"Starting analysis for city: {city_name}")
+        city_info = self.get_city_info()
+        if city_info and city_info.is_valid:
+            self.logger.info(f"Starting analysis for city: {city_info.name}")
     
     def on_city_shutdown(self) -> None:
         """Called when a city is being shut down."""
         super().on_city_shutdown()
         self.logger.info("City analysis stopped for city shutdown")
+
+
+# Plugin instance - this is what gets loaded by the framework
+plugin_instance = CityAnalyzerPlugin

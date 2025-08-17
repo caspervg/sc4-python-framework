@@ -35,12 +35,13 @@ void Logger::Initialize()
             std::filesystem::create_directories(logDir);
             
             std::string logPath = (logDir / "SC4PythonFramework.log").string();
-            sinks.push_back(std::make_shared<spdlog::sinks::basic_file_sink_mt>(logPath, true));
+            sinks.push_back(std::make_shared<spdlog::sinks::basic_file_sink_mt>(logPath, false));
         }
         
         s_logger = std::make_shared<spdlog::logger>("SC4PythonFramework", sinks.begin(), sinks.end());
         s_logger->set_level(spdlog::level::debug);
         s_logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%n] [%l] %v");
+        s_logger->flush_on(spdlog::level::debug); // Flush on every log message
         
         s_initialized = true;
         

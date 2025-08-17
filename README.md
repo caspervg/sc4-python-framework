@@ -1,243 +1,108 @@
 # SC4 Python Framework
 
-A framework for writing SimCity 4 plugins in Python instead of C++. This framework provides safe access to SC4's game engine through a memory-safe C++ wrapper layer, allowing you to create powerful plugins using Python's ecosystem.
+Write SimCity 4 plugins in Python instead of C++.
 
 ## Requirements
+- Visual Studio 2022 (MSVC toolchain)
+- CMake 3.20+
+- Python 3.13+ (lower versions may work, but not tested)
+- SimCity 4 Deluxe Edition
 
-- **Windows 10/11** (SimCity 4 platform)
-- **Visual Studio 2019/2022** with MSVC toolchain
-- **CMake 3.20+**
-- **Python 3.13+**
-- **SimCity 4 Deluxe Edition**
-
-## Architecture Overview
-
-```
-Development Environment (64-bit)           SimCity 4 Runtime (32-bit)
-┌─────────────────────────────┐           ┌─────────────────────────────┐
-│  Python 3.13+ (64-bit)     │  build    │  SC4PythonFramework.dll     │
-│  - Plugin development      │  ──────►  │  - Embedded Python (32-bit)│
-│  - Package management      │           │  - GZCOM integration        │
-│  - Testing & debugging     │           │  - Plugin execution         │
-└─────────────────────────────┘           └─────────────────────────────┘
-```
-
-### How It Works
-1. **Development**: You write plugins in a modern Python environment
-   - Use any packages, libraries, and tools available for Python
-   - Develop using your favorite IDE (VS Code, PyCharm, etc.)
-2. **Build**: CMake creates a 32-bit DLL with embedded Python
-3. **Runtime**: Python runs in SimCity 4's 32-bit address space
-4. **Plugin Execution**: Your Python code executes within the game process
-
-## Quick Start
-
-### 1. Clone and Setup
-
+## Build
 ```bash
-git clone https://github.com/caspervg/sc4-python-framework.git
-cd sc4-python-framework
-git submodule update --init --recursive
-```
-
-### 2. Build the Framework
-
-#### Using CLion:
-1. Open project in CLion
-2. Configure CMake with:
-   - Generator: Visual Studio 17 2022
-   - Architecture: Win32 (will auto-detect if needed)
-   - Build type: Release
-
-#### Using Command Line:
-```bash
+git clone --recursive <repository-url>
+cd sc4-python-wrapper
 mkdir build && cd build
-
-# CMake will automatically configure for 32-bit SC4 compatibility
-cmake .. -G "Visual Studio 17 2022"
+cmake .. -G "Visual Studio 17 2022" -A Win32
 cmake --build . --config Release
 ```
 
-### 3. Install to SimCity 4
+## Installation
+1. Copy `build/Release/SC4PythonFramework.dll` to `<My Documents>\SimCity 4\Plugins\`
+2. Copy the entire `src/python/` directory to `<My Documents>\SimCity 4\PythonScripts\`
+3. Your plugins go in `<My Documents>\SimCity 4\PythonScripts\examples\`
 
+## Setup Dependencies
+Run this in the PythonScripts directory to install required packages:
 ```bash
-# Copy to SimCity 4 Plugins folder
-cp build/Release/SC4PythonFramework.dll "C:/Program Files (x86)/Maxis/SimCity 4 Deluxe/Plugins/"
-cp -r build/python "C:/Program Files (x86)/Maxis/SimCity 4 Deluxe/Plugins/"
+cd "<My Documents>\SimCity 4\PythonScripts"
+uv pip install --target . pydantic
 ```
 
-### 4. Write Your First Plugin
+## Creating Plugins
 
-Create `my_plugin.py` in the plugins/python folder:
-
+### Basic Plugin Structure
 ```python
 from sc4_plugin_base import CheatPlugin
+from sc4_types import CheatCommand
+from typing import Dict
 
 class MyPlugin(CheatPlugin):
-    @property
-    def name(self) -> str:
-        return "My Awesome Plugin"
-    
-    @property
-    def version(self) -> str:
-        return "1.0.0"
-    
-    @property
-    def description(self) -> str:
-        return "Does awesome things!"
+    def get_plugin_info(self) -> Dict[str, str]:
+        return {
+            "name": "My Plugin",
+            "version": "1.0.0",
+            "description": "Does something cool",
+            "author": "Your Name"
+        }
     
     def initialize(self) -> bool:
-        self.register_cheat("awesome", self.do_awesome_thing, "Make the city awesome")
+        self.register_cheat("mycmd", "My custom command")
         return super().initialize()
     
-    def do_awesome_thing(self) -> None:
-        if self.city.is_valid():
-            self.city.add_city_money(1000000)
-            self.logger.info("Made the city $1M more awesome!")
+    def process_cheat(self, cheat: CheatCommand) -> bool:
+        if cheat.text.lower() == "mycmd":
+            print("My command executed!")
+            return True
+        return False
+
+# Required: plugin instance
+plugin_instance = MyPlugin
 ```
 
-## Development Workflow
+### Plugin Types
+- `CheatPlugin`: Handle cheat commands
+- `SC4MessagePlugin`: Handle game messages  
+- `SC4PluginBase`: Base class for custom behavior
 
-### Setting up Development Environment
+## Features
 
-```bash
-# Use your normal Python (64-bit is fine!)
-cd src/python/examples
-uv sync  # Install development dependencies
+- Python 3.13 interpreter embedded in SC4's process
+- Type-safe plugin API using Pydantic
+- Unified logging system
+- Plugin hot-reloading for development
 
-# Develop plugins using your favorite tools
-code basic_cheats.py  # VS Code, PyCharm, etc.
-```
+## How it works
 
-### Building and Testing
+C++ DLL loads into SC4 and embeds a Python interpreter. Your plugins run as Python code with access to game data through safe wrapper classes.
 
-```bash
-# Build the 32-bit DLL
-cmake --build build --config Release
+## Logging
 
-# Test in SimCity 4
-```
+All output goes to: `<My Documents>\SimCity 4\SC4PythonFramework.log`
 
-### Package Management
-
-Use `uv` with your development Python:
-
-```bash
-# Add dependencies for your plugins
-cd src/python/examples
-uv add numpy pandas matplotlib
-
-# The build system ensures compatibility at runtime
-```
-
-## Memory safety
-
-1. **Composition over inheritance**: Never inherit from SC4 interfaces
-2. **Thin adapters**: Minimal SC4 interface implementations  
-3. **Safe boundaries**: Clear separation between "SC4 world" and "Python world"
-4. **RAII patterns**: Automatic resource management
-5. **Smart pointers**: No raw pointer management
-
-## Building from Source
-
-### Prerequisites
-
-1. **Visual Studio 2022** with C++ development tools
-2. **CMake 3.20+** 
-3. **Python 3.13+**
-4. **Git** for cloning with submodules
-
-### Build Configuration
-
-The build system automatically handles architecture detection:
-
-```bash
-# Configure (auto-detects 32-bit requirement for SC4)
-cmake -B build -G "Visual Studio 17 2022" -DCMAKE_BUILD_TYPE=Release
-
-# Build 32-bit DLL regardless of host Python
-cmake --build build --config Release
-```
-
-### Troubleshooting
-
-**"Python libraries not found"**: Install Python development packages
-```bash
-# Windows
-pip install --upgrade pip setuptools wheel
-```
-
-**"Architecture warnings"**: Normal when cross-compiling 64→32 bit
-```
-Building 32-bit DLL for SC4 compatibility (host is 64-bit)
-Cross-compiling: 64-bit Python -> 32-bit DLL
-```
-
-**"Missing dependencies"**: Update submodules
-```bash
-git submodule update --init --recursive
-```
-
-## Plugin Development
-
-### Base Classes
-
-- `SC4PluginBase`: Foundation for all plugins
-- `CheatPlugin`: For implementing cheat codes  
-- `CityAnalysisPlugin`: For analyzing city data
-- `EventPlugin`: For responding to game events
-
-### City Data Access
-
+Use standard Python logging:
 ```python
-# Safe city data access
-city_name = self.city.get_city_name()
-population = self.city.get_city_population() 
-money = self.city.get_city_money()
-
-# Modify city (safe operations only)
-self.city.set_city_money(1000000)
-self.city.add_city_money(50000)
-self.city.set_mayor_mode(True)
-
-# Get detailed statistics
-stats = self.city.get_city_stats()
-print(f"Power: {stats.power_produced}/{stats.power_consumed}")
+self.logger.info("Something happened")
+print("This also appears in the log")
 ```
 
-## Debugging
+## Examples
 
-### C++ Debugging
+Example plugins in `PythonScripts/examples/`:
+- `logging_demo.py`: Demonstrates logging integration
+- `simple_cheat_test.py`: Basic cheat command example
 
-1. Build in Debug mode: `cmake --build build --config Debug`
-2. Attach debugger to SimCity4.exe
-3. Set breakpoints in C++ wrapper code
+## Technical Details
+- 32-bit DLL compatible with SC4's architecture
+- Dependencies: gzcom-dll, pybind11, spdlog
+- Python packages managed via uv
 
-### Python Debugging
+## Troubleshooting
 
-```python
-# Logs appear in both places:
-self.logger.info("Debug message")  # SC4 log file
-print("Debug output")  # VS Debug output (if attached)
-```
+### Common issues
+- **"Python libraries not found"**: Ensure Python 3.13+ is installed
+- **"Module not found"**: Run the dependency setup command
+- **Plugins not loading**: Check the log file for specific errors
 
-Log files location:
-- `sc4_python.log` in SimCity 4 directory
-- Visual Studio Output window (Debug builds)
-
-## Contributing
-
-1. Fork the repository
-2. Test builds target 32-bit automatically
-3. Verify compatibility with actual SimCity 4
-4. Submit pull request
-
-## License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- **nsgomez**, **memo**, **0xC0000054** and others for gzcom-dll framework and many decoded headers
-- **pybind11** team for seamless Python-C++ integration
-- **SimCity 4 modding community** for extensive reverse engineering and keeping the game alive!
+### Debug mode
+Build in Debug mode and attach CLion debugger to `SimCity4.exe` process for C++ debugging.

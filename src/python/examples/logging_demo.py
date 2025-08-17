@@ -67,9 +67,9 @@ class LoggingDemoPlugin(CheatPlugin):
             print("Direct C++ logging not available")
         
         # Multi-line logging
-        multi_line = \"\"\"This is a multi-line
+        multi_line = """This is a multi-line
         log message that spans
-        several lines\"\"\"
+        several lines"""
         self.logger.info(f"Multi-line message: {multi_line}")
         
         print("=== Logging Methods Test Complete ===")

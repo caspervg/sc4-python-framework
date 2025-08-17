@@ -11,6 +11,7 @@ using namespace py::literals;
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include <map>
 #include "spdlog/logger.h"
 
 #include "../wrappers/CityWrapper.h"
@@ -56,6 +57,9 @@ public:
 
     // Error handling
     std::string GetLastError() const { return lastError; }
+    
+    // Cheat management
+    std::map<std::string, std::string> GetRegisteredCheats() const;
 
 private:
     // Python environment

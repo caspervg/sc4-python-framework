@@ -213,6 +213,7 @@ bool PythonManager::CallAllPlugins(const std::string& method)
 
 bool PythonManager::HandleMessage(cIGZMessage2& message)
 {
+    (void)message; // Mark as used
     if (!pythonInitialized) return true;
     
     LOG_DEBUG("HandleMessage called");
@@ -276,23 +277,31 @@ bool PythonManager::HandleCheat(uint32_t cheatID, const std::string& cheatText)
         py::module sc4_types = py::module::import("sc4_types");
         py::object CheatCommand = sc4_types.attr("CheatCommand");
         
-        // Create a CheatCommand object
-        py::object cheatCommand = CheatCommand(
-            py::arg("cheat_id") = cheatID,
-            py::arg("text") = cheatText
-        );
+        // Create a CheatCommand object using keyword arguments
+        py::dict cheatArgs;
+        cheatArgs["cheat_id"] = cheatID;
+        cheatArgs["text"] = cheatText;
+        py::object cheatCommand = CheatCommand(**cheatArgs);
         
         // Call all plugins with the CheatCommand object
         for (const auto& [pluginName, plugin] : loadedPlugins) {
             if (plugin.loaded && plugin.instance_ptr) {
-                auto* pluginObj = static_cast<py::object*>(plugin.instance_ptr);
-                if (py::hasattr(*pluginObj, "handle_cheat")) {
-                    py::object result = pluginObj->attr("handle_cheat")(cheatCommand);
-                    // If any plugin handles the cheat and returns True, consider it processed
-                    if (result.cast<bool>()) {
-                        LOG_INFO("Cheat '{}' handled by plugin: {}", cheatText, pluginName);
-                        return true;
+                try {
+                    auto* pluginObj = static_cast<py::object*>(plugin.instance_ptr);
+                    if (py::hasattr(*pluginObj, "handle_cheat")) {
+                        LOG_DEBUG("Calling handle_cheat on plugin: {}", pluginName);
+                        py::object result = pluginObj->attr("handle_cheat")(cheatCommand);
+                        // If any plugin handles the cheat and returns True, consider it processed
+                        if (result.cast<bool>()) {
+                            LOG_INFO("Cheat '{}' handled by plugin: {}", cheatText, pluginName);
+                            return true;
+                        }
+                    } else {
+                        LOG_DEBUG("Plugin {} does not have handle_cheat method", pluginName);
                     }
+                } catch (const std::exception& e) {
+                    LOG_ERROR("Error calling handle_cheat on plugin {}: {}", pluginName, e.what());
+                    // Continue to next plugin rather than failing completely
                 }
             }
         }
@@ -341,24 +350,34 @@ bool PythonManager::OnCityShutdown()
 std::vector<std::string> PythonManager::DiscoverPluginFiles() const
 {
     std::vector<std::string> pluginFiles;
-    std::string pluginsDir = GetPluginsDirectory();
+    std::string scriptsDir = GetPluginsDirectory();
+    
+    // Look for plugins in an "examples" subdirectory to avoid loading framework files
+    std::string pluginsDir = scriptsDir + "\\examples";
 
     try
     {
         if (!std::filesystem::exists(pluginsDir))
         {
             LOG_WARN("Plugins directory does not exist: {}", pluginsDir);
+            LOG_INFO("Expected plugin location: {}", pluginsDir);
             return pluginFiles;
         }
 
+        LOG_INFO("Searching for plugins in: {}", pluginsDir);
+        
         for (const auto& entry : std::filesystem::directory_iterator(pluginsDir))
         {
             if (entry.is_regular_file() && entry.path().extension() == ".py")
             {
                 std::string filename = entry.path().filename().string();
-                if (filename[0] != '_')
+                // Skip files starting with underscore or common non-plugin files
+                if (filename[0] != '_' && 
+                    filename != "setup_deps.py" &&
+                    filename != "__init__.py")
                 {
                     pluginFiles.push_back(entry.path().string());
+                    LOG_INFO("Found potential plugin: {}", filename);
                 }
             }
         }
@@ -482,29 +501,47 @@ bool PythonManager::LoadPlugin(const std::string& filepath)
             return true;
         }
 
-        // TODO: Use plugin loader class once it's properly initialized
-        // For now, directly import the plugin module
-        py::module pluginModule = py::module::import(pluginName.c_str());
+        // Import the plugin module from examples subdirectory
+        std::string moduleName = "examples." + pluginName;
+        py::module pluginModule = py::module::import(moduleName.c_str());
         
-        // TODO: Instantiate plugin class and call initialize
-        // py::object pluginInstance = pluginModule.attr("Plugin")(cityWrapper);
+        // Look for plugin_instance in the module
+        if (!py::hasattr(pluginModule, "plugin_instance")) {
+            LOG_WARN("Plugin {} does not have 'plugin_instance' attribute", pluginName);
+            return false;
+        }
+        
+        // Get the plugin class and instantiate it
+        py::object pluginClass = pluginModule.attr("plugin_instance");
+        py::object pluginInstance = pluginClass();
+        
+        // Store the plugin instance
+        py::object* instancePtr = new py::object(pluginInstance);
 
         PluginInfo info;
         info.filepath = filepath;
         info.name = pluginName;
-        info.instance_ptr = nullptr;  // TODO: Store plugin instance
+        info.instance_ptr = instancePtr;
         info.loaded = true;
 
         loadedPlugins[pluginName] = info;
 
-        // CallPluginMethod(pluginName, "initialize");
+        // Call initialize method on the plugin
+        if (py::hasattr(pluginInstance, "initialize")) {
+            bool initResult = pluginInstance.attr("initialize")().cast<bool>();
+            if (!initResult) {
+                LOG_WARN("Plugin {} initialize() returned false", pluginName);
+                UnloadPlugin(pluginName);
+                return false;
+            }
+        }
 
-        LOG_INFO("Loaded plugin: {}", pluginName);
+        LOG_INFO("Successfully loaded plugin: {}", pluginName);
         return true;
     }
     catch (const std::exception& e)
     {
-        SetError("Failed to load plugin " + filepath + ": " + std::string(e.what()));
+        LOG_ERROR("Failed to load plugin {}: {}", filepath, e.what());
         return false;
     }
 }
@@ -533,6 +570,41 @@ void PythonManager::UnloadPlugin(const std::string& pluginName)
             LOG_ERROR("Error unloading plugin {}: {}", pluginName, e.what());
         }
     }
+}
+
+std::map<std::string, std::string> PythonManager::GetRegisteredCheats() const
+{
+    std::map<std::string, std::string> registeredCheats;
+    
+    if (!pythonInitialized) {
+        return registeredCheats;
+    }
+    
+    try {
+        // Get cheats from all loaded plugins
+        for (const auto& [pluginName, plugin] : loadedPlugins) {
+            if (plugin.loaded && plugin.instance_ptr) {
+                auto* pluginObj = static_cast<py::object*>(plugin.instance_ptr);
+                
+                // Check if plugin has get_registered_cheats method
+                if (py::hasattr(*pluginObj, "get_registered_cheats")) {
+                    py::object cheatsDict = pluginObj->attr("get_registered_cheats")();
+                    
+                    // Convert Python dict to C++ map
+                    py::dict cheats = cheatsDict.cast<py::dict>();
+                    for (auto item : cheats) {
+                        std::string cheatText = item.first.cast<std::string>();
+                        std::string description = item.second.cast<std::string>();
+                        registeredCheats[cheatText] = description;
+                    }
+                }
+            }
+        }
+    } catch (const std::exception& e) {
+        LOG_ERROR("Error getting registered cheats: {}", e.what());
+    }
+    
+    return registeredCheats;
 }
 
 void PythonManager::SetError(const std::string& error) const
