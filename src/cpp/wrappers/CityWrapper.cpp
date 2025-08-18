@@ -63,7 +63,10 @@ uint32_t CityWrapper::GetCityMoney() const
     if (budget)
     {
         int64_t funds = budget->GetTotalFunds();
-        return static_cast<uint32_t>(std::max(0LL, funds));
+        // Clamp to uint32_t range to prevent overflow
+        if (funds < 0) return 0;
+        if (funds > UINT32_MAX) return UINT32_MAX;
+        return static_cast<uint32_t>(funds);
     }
     return 0;
 }
@@ -75,6 +78,7 @@ bool CityWrapper::SetCityMoney(uint32_t amount)
     cISC4BudgetSimulator* budget = city->GetBudgetSimulator();
     if (budget)
     {
+        // Safe cast since uint32_t always fits in int64_t
         return budget->SetTotalFunds(static_cast<int64_t>(amount));
     }
     return false;
@@ -87,6 +91,20 @@ bool CityWrapper::AddCityMoney(int32_t amount)
     cISC4BudgetSimulator* budget = city->GetBudgetSimulator();
     if (budget)
     {
+        // Check for potential overflow before performing operation
+        int64_t currentFunds = budget->GetTotalFunds();
+        int64_t newFunds = currentFunds + static_cast<int64_t>(amount);
+        
+        // Ensure result stays within valid range
+        if (newFunds < 0) {
+            // Can't have negative funds, set to 0
+            return budget->SetTotalFunds(0);
+        }
+        if (newFunds > UINT32_MAX) {
+            // Clamp to maximum uint32_t value
+            return budget->SetTotalFunds(UINT32_MAX);
+        }
+        
         if (amount >= 0)
         {
             return budget->DepositFunds(static_cast<int64_t>(amount));

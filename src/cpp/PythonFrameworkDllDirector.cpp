@@ -10,6 +10,8 @@
 #include "cRZBaseString.h"
 #include "GZServPtrs.h"
 #include <memory>
+#include <algorithm>
+#include <unordered_map>
 #include <windows.h>
 
 
@@ -155,18 +157,16 @@ public:
                     return true;
                 }
                 
-                // Check if this is one of our Python cheats
-                LOG_INFO("Getting registered cheats");
-                auto pythonCheats = pythonManager->GetRegisteredCheats();
-                LOG_INFO("Got {} registered cheats", pythonCheats.size());
+                // Check if this is one of our registered Python cheats by ID
+                auto cheatIter = registeredCheats.find(dwCheatID);
                 
-                bool isPythonCheat = pythonCheats.find(cheatText) != pythonCheats.end();
-                
-                if (isPythonCheat) {
-                    LOG_INFO("Processing Python cheat: '{}'", cheatText);
+                if (cheatIter != registeredCheats.end()) {
+                    const auto& cheatInfo = cheatIter->second;
+                    LOG_INFO("Processing Python cheat ID 0x{:08x}: '{}' from plugin '{}'", 
+                            dwCheatID, cheatText, cheatInfo.pluginName);
                     ProcessCheat(dwCheatID, pszCheatData);
                 } else {
-                    LOG_DEBUG("Ignoring non-Python cheat: '{}'", cheatText);
+                    LOG_DEBUG("Ignoring non-Python cheat ID 0x{:08x}: '{}'", dwCheatID, cheatText);
                 }
             } catch (const std::exception& e) {
                 LOG_ERROR("Exception in cheat processing: {}", e.what());
@@ -187,6 +187,12 @@ public:
 private:
     std::unique_ptr<PythonManager> pythonManager;
     cIGZCheatCodeManager* cheatManager;
+    
+    struct CheatInfo {
+        std::string cheatText;
+        std::string pluginName;
+    };
+    std::unordered_map<uint32_t, CheatInfo> registeredCheats; // Maps cheat ID to cheat info
     
     bool SetupCheatManager()
     {
@@ -229,17 +235,40 @@ private:
             return;
         }
         
-        // Get list of registered cheats from Python plugins
-        auto pythonCheats = pythonManager->GetRegisteredCheats();
+        // Get list of registered cheats from Python plugins with plugin info
+        auto pythonCheats = pythonManager->GetRegisteredCheatsWithPlugin();
         
-        for (const auto& [cheatText, cheatInfo] : pythonCheats) {
-            uint32_t cheatID = std::hash<std::string>{}(cheatText); // Generate ID from text
-            cRZBaseString cheatName(cheatText.c_str());
+        // Use a deterministic cheat ID generation scheme to avoid collisions
+        uint32_t baseCheatID = 0x50594348; // "PYCH" in ASCII - Python Cheat base ID
+        uint32_t cheatCounter = 0;
+        
+        for (const auto& cheatInfo : pythonCheats) {
+            // Normalize cheat text to lowercase for consistent handling
+            std::string lowerCheatText = cheatInfo.cheatText;
+            std::transform(lowerCheatText.begin(), lowerCheatText.end(), lowerCheatText.begin(), ::tolower);
+            
+            // Check if cheat already exists
+            cRZBaseString cheatName(lowerCheatText.c_str());
+            uint32_t existingCheatID = 0;
+            if (cheatManager->DoesCheatCodeMatch(cheatName, existingCheatID)) {
+                LOG_WARN("Cheat '{}' already exists with ID 0x{:08x}, skipping registration", lowerCheatText, existingCheatID);
+                continue;
+            }
+            
+            uint32_t cheatID = baseCheatID + cheatCounter++;
             
             if (cheatManager->RegisterCheatCode(cheatID, cheatName)) {
-                LOG_INFO("Registered Python cheat: '{}' with ID 0x{:08x}", cheatText, cheatID);
+                LOG_INFO("Registered Python cheat: '{}' from plugin '{}' with ID 0x{:08x}", 
+                        lowerCheatText, cheatInfo.pluginName, cheatID);
+                
+                // Store the mapping with plugin info
+                CheatInfo registeredCheat;
+                registeredCheat.cheatText = lowerCheatText;
+                registeredCheat.pluginName = cheatInfo.pluginName;
+                registeredCheats[cheatID] = registeredCheat;
             } else {
-                LOG_WARN("Failed to register Python cheat: '{}'", cheatText);
+                LOG_WARN("Failed to register Python cheat: '{}' from plugin '{}'", 
+                        lowerCheatText, cheatInfo.pluginName);
             }
         }
     }
@@ -259,8 +288,17 @@ private:
 
         LOG_INFO("ProcessCheat called - ID: 0x{:08x}, Text: '{}'", dwCheatID, cheatText);
         
-        // Forward to Python manager
-        return pythonManager->HandleCheat(dwCheatID, cheatText);
+        // Check if we have this cheat registered and get the plugin name
+        auto cheatIter = registeredCheats.find(dwCheatID);
+        if (cheatIter != registeredCheats.end()) {
+            const auto& cheatInfo = cheatIter->second;
+            LOG_DEBUG("Targeting cheat to specific plugin: '{}'", cheatInfo.pluginName);
+            return pythonManager->HandleCheatForPlugin(dwCheatID, cheatText, cheatInfo.pluginName);
+        } else {
+            LOG_WARN("Cheat ID 0x{:08x} not found in registered cheats", dwCheatID);
+            // Fallback to general cheat handling
+            return pythonManager->HandleCheat(dwCheatID, cheatText);
+        }
     }
 };
 

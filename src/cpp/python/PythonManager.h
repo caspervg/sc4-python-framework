@@ -43,6 +43,7 @@ public:
     
     // Cheat handling
     bool HandleCheat(uint32_t cheatID, const std::string& cheatText);
+    bool HandleCheatForPlugin(uint32_t cheatID, const std::string& cheatText, const std::string& pluginName);
 
     // City events
     bool OnCityInit();
@@ -59,7 +60,14 @@ public:
     std::string GetLastError() const { return lastError; }
     
     // Cheat management
+    struct CheatInfo {
+        std::string cheatText;
+        std::string description;
+        std::string pluginName;
+    };
     std::map<std::string, std::string> GetRegisteredCheats() const;
+    std::vector<CheatInfo> GetRegisteredCheatsWithPlugin() const;
+    std::map<uint32_t, std::string> GetCheatIdMappings() const;
 
 private:
     // Python environment
@@ -81,6 +89,10 @@ private:
     
     std::unordered_map<std::string, PluginInfo> loadedPlugins;
     std::shared_ptr<CityWrapper> cityWrapper;
+
+    // Cheat ID tracking
+    std::map<uint32_t, std::string> cheatIdToText;  // Maps cheat ID to cheat text
+    std::map<std::string, uint32_t> cheatTextToId;  // Maps cheat text to cheat ID
 
     // Error tracking
     mutable std::string lastError;

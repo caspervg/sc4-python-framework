@@ -38,43 +38,48 @@ class BasicCheatsPlugin(CheatPlugin):
         cheat_text = cheat.text.lower()
         
         if cheat_text == "swimminginit":
-            self.max_money()
+            self.set_treasure_max()
             return True
         
         return False
     
     def add_money(self) -> None:
         """Add 1,000,000 simoleons to the city treasury."""
-        city_info = self.get_city_info()
-        if not city_info or not city_info.is_valid:
+        if not self.city_wrapper or not self.city_wrapper.is_valid():
             self.logger.warning("No city loaded")
             return
         
         amount = 1_000_000
-        # Note: actual money manipulation would need C++ wrapper implementation
-        self.logger.info(f"Would add ${amount:,} to treasury (not yet implemented)")
-        self.logger.info(f"Current balance: ${city_info.money:,}")
+        if self.city_wrapper.add_city_money(amount):
+            self.logger.info(f"Added ${amount:,} to treasury")
+            self.logger.info(f"New balance: ${self.city_wrapper.get_city_money():,}")
+        else:
+            self.logger.error("Failed to add city money")
     
-    def max_money(self) -> None:
-        """Set city money to maximum amount."""
-        city_info = self.get_city_info()
-        if not city_info or not city_info.is_valid:
+    def set_treasure_max(self) -> None:
+        """Set city money to maximum amount (999,999,999)."""
+        if not self.city_wrapper or not self.city_wrapper.is_valid():
             self.logger.warning("No city loaded")
             return
         
         amount = 999_999_999
-        self.logger.info(f"Would set treasury to: ${amount:,} (not yet implemented)")
-        self.logger.info(f"Current balance: ${city_info.money:,}")
+        if self.city_wrapper.set_city_money(amount):
+            self.logger.info(f"Set treasury to: ${amount:,}")
+            self.logger.info(f"New balance: ${self.city_wrapper.get_city_money():,}")
+        else:
+            self.logger.error("Failed to set city money")
     
-    def on_city_init(self) -> None:
+    def on_city_init(self) -> bool:
         """Called when a city is loaded."""
-        city_info = self.get_city_info()
-        if city_info and city_info.is_valid:
-            self.logger.info(f"Basic cheats available for city: {city_info.name}")
+        if self.city_wrapper and self.city_wrapper.is_valid():
+            city_name = self.city_wrapper.get_city_name()
+            self.logger.info(f"Basic cheats available for city: {city_name}")
+        return True
     
-    def on_city_shutdown(self) -> None:
+    def on_city_shutdown(self) -> bool:
         """Called when a city is being shut down."""
         self.logger.info("Basic cheats disabled for city shutdown")
+        return True
 
 
 # Plugin instance - this is what gets loaded by the framework

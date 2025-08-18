@@ -165,6 +165,7 @@ class CheatPlugin(SC4PluginBase):
             cheat_text: The cheat text (e.g., "myplugin:givemoney")
             description: Human-readable description of what the cheat does
         """
+        # Always store cheats in lowercase for consistent case-insensitive handling
         self._registered_cheats[cheat_text.lower()] = description
 
     def get_registered_cheats(self) -> Dict[str, str]:

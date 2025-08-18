@@ -326,6 +326,66 @@ bool PythonManager::HandleCheat(uint32_t cheatID, const std::string& cheatText)
     }
 }
 
+bool PythonManager::HandleCheatForPlugin(uint32_t cheatID, const std::string& cheatText, const std::string& pluginName)
+{
+    if (!pythonInitialized) {
+        LOG_WARN("HandleCheatForPlugin called but Python not initialized");
+        return false;
+    }
+    
+    LOG_INFO("HandleCheatForPlugin called - ID: 0x{:08x}, Text: '{}', Plugin: '{}'", cheatID, cheatText, pluginName);
+    
+    try {
+        LOG_DEBUG("Step 1: Importing sc4_types module");
+        py::module sc4_types = py::module::import("sc4_types");
+        
+        LOG_DEBUG("Step 2: Getting CheatCommand class");
+        py::object CheatCommand = sc4_types.attr("CheatCommand");
+        
+        LOG_DEBUG("Step 3: Creating CheatCommand arguments");
+        py::dict cheatArgs;
+        cheatArgs["cheat_id"] = cheatID;
+        cheatArgs["text"] = cheatText;
+        
+        LOG_DEBUG("Step 4: Creating CheatCommand object");
+        py::object cheatCommand = CheatCommand(**cheatArgs);
+        LOG_DEBUG("Step 5: CheatCommand created successfully");
+        
+        // Call specific plugin with the CheatCommand object
+        auto pluginIter = loadedPlugins.find(pluginName);
+        if (pluginIter != loadedPlugins.end() && pluginIter->second.loaded && pluginIter->second.instance_ptr) {
+            try {
+                LOG_DEBUG("Step 6: Processing specific plugin: {}", pluginName);
+                auto* pluginObj = static_cast<py::object*>(pluginIter->second.instance_ptr);
+                
+                if (py::hasattr(*pluginObj, "handle_cheat")) {
+                    LOG_DEBUG("Step 7: Calling handle_cheat on plugin: {}", pluginName);
+                    py::object result = pluginObj->attr("handle_cheat")(cheatCommand);
+                    
+                    LOG_DEBUG("Step 8: Got result from plugin {}", pluginName);
+                    if (result.cast<bool>()) {
+                        LOG_INFO("Cheat '{}' handled by plugin: {}", cheatText, pluginName);
+                        return true;
+                    }
+                    LOG_DEBUG("Step 9: Plugin {} returned false", pluginName);
+                } else {
+                    LOG_DEBUG("Plugin {} does not have handle_cheat method", pluginName);
+                }
+            } catch (const std::exception& e) {
+                LOG_ERROR("Error calling handle_cheat on plugin {}: {}", pluginName, e.what());
+            }
+        } else {
+            LOG_WARN("Plugin '{}' not found or not loaded", pluginName);
+        }
+    } catch (const std::exception& e) {
+        LOG_ERROR("Error in HandleCheatForPlugin: {}", e.what());
+        return false;
+    }
+    
+    LOG_WARN("Plugin '{}' did not handle cheat '{}' (ID: 0x{:08x})", pluginName, cheatText, cheatID);
+    return false;
+}
+
 bool PythonManager::OnCityInit()
 {
     if (!pythonInitialized) return true;
@@ -615,6 +675,48 @@ std::map<std::string, std::string> PythonManager::GetRegisteredCheats() const
     }
     
     return registeredCheats;
+}
+
+std::vector<PythonManager::CheatInfo> PythonManager::GetRegisteredCheatsWithPlugin() const
+{
+    std::vector<CheatInfo> cheatsWithPlugin;
+    
+    if (!pythonInitialized) {
+        return cheatsWithPlugin;
+    }
+    
+    try {
+        // Get cheats from all loaded plugins
+        for (const auto& [pluginName, plugin] : loadedPlugins) {
+            if (plugin.loaded && plugin.instance_ptr) {
+                auto* pluginObj = static_cast<py::object*>(plugin.instance_ptr);
+                
+                // Check if plugin has get_registered_cheats method
+                if (py::hasattr(*pluginObj, "get_registered_cheats")) {
+                    py::object cheatsDict = pluginObj->attr("get_registered_cheats")();
+                    
+                    // Convert Python dict to C++ vector with plugin info
+                    py::dict cheats = cheatsDict.cast<py::dict>();
+                    for (auto item : cheats) {
+                        CheatInfo cheatInfo;
+                        cheatInfo.cheatText = item.first.cast<std::string>();
+                        cheatInfo.description = item.second.cast<std::string>();
+                        cheatInfo.pluginName = pluginName;
+                        cheatsWithPlugin.push_back(cheatInfo);
+                    }
+                }
+            }
+        }
+    } catch (const std::exception& e) {
+        LOG_ERROR("Error getting registered cheats with plugin info: {}", e.what());
+    }
+    
+    return cheatsWithPlugin;
+}
+
+std::map<uint32_t, std::string> PythonManager::GetCheatIdMappings() const
+{
+    return cheatIdToText;
 }
 
 void PythonManager::SetError(const std::string& error) const
